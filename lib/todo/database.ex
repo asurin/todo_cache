@@ -18,23 +18,21 @@ defmodule Todo.Database do
   # Server
 
   def init(db_folder) do
-    File.mkdir_p(db_folder)
-    {:ok, db_folder}
+    map = Enum.reduce(0..2, %{}, &(Map.put(&2, &1, elem(Todo.DatabaseWorker.start(db_folder),1))))
+    {:ok, map}
   end
 
-  def handle_cast({:store, key, data}, db_folder) do
-    file_name(db_folder, key)
-    |> File.write!(:erlang.term_to_binary(data))
-    {:noreply, db_folder}
+  def handle_cast({:store, key, data}, worker_map) do
+    Todo.DatabaseWorker.store(get_worker(key, worker_map), key, data)
+    {:noreply, worker_map}
   end
 
-  def handle_call({:get, key}, _from, db_folder) do
-    data = case File.read(file_name(db_folder, key)) do
-      {:ok, contents} -> :erlang.binary_to_term(contents)
-      _ -> nil
-    end
-    {:reply, data, db_folder}
+  def handle_call({:get, key}, _from, worker_map) do
+    data = Todo.DatabaseWorker.get(get_worker(key, worker_map), key)
+    {:reply, data, worker_map}
   end
 
-  defp file_name(db_folder, key), do: "#{db_folder}/#{key}"
+  def get_worker(key, worker_map) do
+    Map.get(worker_map, :erlang.phash2(key, 3))
+  end
 end

@@ -1,38 +1,24 @@
 defmodule Todo.Database do
-  use GenServer
+  @pool_size 3
 
-  # Interface
-
-  def start(db_folder) do
-    GenServer.start(__MODULE__, db_folder, name: :database_server)
+  def start_link(db_folder) do
+    IO.puts("Starting DB supervisor")
+    Todo.PoolSupervisor.start_link(db_folder, @pool_size)
   end
 
   def store(key, data) do
-    GenServer.cast(:database_server, {:store, key, data})
+    key
+    |> choose_worker
+    |> Todo.DatabaseWorker.store(key, data)
   end
 
   def get(key) do
-    GenServer.call(:database_server, {:get, key})
+    key
+    |> choose_worker
+    |> Todo.DatabaseWorker.get(key)
   end
 
-  # Server
-
-  def init(db_folder) do
-    map = Enum.reduce(0..2, %{}, &(Map.put(&2, &1, elem(Todo.DatabaseWorker.start(db_folder),1))))
-    {:ok, map}
-  end
-
-  def handle_cast({:store, key, data}, worker_map) do
-    Todo.DatabaseWorker.store(get_worker(key, worker_map), key, data)
-    {:noreply, worker_map}
-  end
-
-  def handle_call({:get, key}, _from, worker_map) do
-    data = Todo.DatabaseWorker.get(get_worker(key, worker_map), key)
-    {:reply, data, worker_map}
-  end
-
-  def get_worker(key, worker_map) do
-    Map.get(worker_map, :erlang.phash2(key, 3))
+  def choose_worker(key) do
+    :erlang.phash2(key, @pool_size) + 1
   end
 end

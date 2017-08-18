@@ -3,8 +3,9 @@ defmodule Todo.Server do
 
   # Interface
 
-  def start(todo_list_name) do
-    GenServer.start(__MODULE__, todo_list_name)
+  def start_link(name) do
+    IO.puts("Starting server #{name}")
+    GenServer.start_link(__MODULE__, name, name: via_tuple(name))
   end
 
   def add_entry(pid, new_entry) do
@@ -45,5 +46,13 @@ defmodule Todo.Server do
 
   def handle_call({:entries, date}, _from, {todo_list_name, todo_list}) do
     {:reply, Todo.List.entries(todo_list, date), {todo_list_name, todo_list}}
+  end
+
+  defp via_tuple(name) do
+    {:via, Todo.ProcessRegistry, {:todo_server, name}}
+  end
+
+  def whereis(name) do
+    Todo.ProcessRegistry.whereis_name({:todo_server, name})
   end
 end
